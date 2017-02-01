@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using NLog.Common;
 using NLog.Config;
 using SharpRaven;
@@ -48,6 +49,16 @@ namespace NLog.Targets
         /// Determines whether event properites will be sent to sentry as Tags or not
         /// </summary>
         public bool SendLogEventInfoPropertiesAsTags { get; set; }
+
+        /// <summary>
+        /// Determines service name that causes current event
+        /// </summary>
+        public string ServiceName { get; set; }
+
+        /// <summary>
+        /// Determines whether event exceptions will be formated in sentry. Raw format by default
+        /// </summary>
+        public bool FormatExceptions { get; set; } = false;
 
         /// <summary>
         /// Constructor
@@ -100,10 +111,19 @@ namespace NLog.Targets
 
         private SentryEvent LogEventToSentry(LogEventInfo logEvent)
         {
-            var sentryEvent = logEvent.Exception == null
-                ? new SentryEvent(Layout.Render(logEvent))
-                : new SentryEvent(logEvent.Exception);
+            SentryEvent sentryEvent;
+            if (FormatExceptions)
+            {
+                sentryEvent = logEvent.Exception == null
+                    ? new SentryEvent(Layout.Render(logEvent))
+                    : new SentryEvent(logEvent.Exception);
+            }
+            else
+            {
+                sentryEvent = new SentryEvent(Layout.Render(logEvent));
+            }
 
+            sentryEvent.Tags.Add("service", ServiceName);
             sentryEvent.Level = LoggingLevelMap[logEvent.Level];
 
             if (SendLogEventInfoPropertiesAsTags)
