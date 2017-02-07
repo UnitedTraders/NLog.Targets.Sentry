@@ -58,7 +58,7 @@ namespace NLog.Targets
         /// <summary>
         /// Determines whether event exceptions will be formated in sentry. Raw format by default
         /// </summary>
-        public bool FormatExceptions { get; set; } = false;
+        public bool FormatExceptions { get; set; }
 
         /// <summary>
         /// Constructor
