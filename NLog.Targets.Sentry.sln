@@ -1,7 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NLog.Targets.Sentry", "NLog.Targets.Sentry\NLog.Targets.Sentry.csproj", "{C4DA3206-227C-4C65-86BB-0B91CB01B50B}"
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NLog.Targets.Sentry.Raven", "NLog.Targets.Sentry\NLog.Targets.Sentry.Raven.csproj", "{C4DA3206-227C-4C65-86BB-0B91CB01B50B}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NLog.Targets.Sentry.UnitTests", "NLog.Targets.Sentry.UnitTests\NLog.Targets.Sentry.UnitTests.csproj", "{EF040563-38FB-491B-AA34-30B1BC7AB0CC}"
 EndProject

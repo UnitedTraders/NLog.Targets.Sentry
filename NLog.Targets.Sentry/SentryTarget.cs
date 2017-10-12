@@ -1,11 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using NLog.Common;
+﻿using NLog.Common;
 using NLog.Config;
 using SharpRaven;
 using SharpRaven.Data;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
 
 // ReSharper disable CheckNamespace
 namespace NLog.Targets
@@ -15,20 +16,37 @@ namespace NLog.Targets
     public class SentryTarget : TargetWithLayout
     {
         private Dsn dsn;
+        private TimeSpan clientTimeout;
         private readonly Lazy<IRavenClient> client;
+        private static readonly string rootAssemblyVersion;
+
+        private const string RawStackTraceKey = "RawStackTrace";
+        private const string ServiceNameKey = "ServiceName";
+        private const string DefaultRavenEnvironment = "develop";
+        private const int DefaultRavenTimeoutSeconds = 10;
 
         /// <summary>
         /// Map of NLog log levels to Raven/Sentry log levels
         /// </summary>
         protected static readonly IDictionary<LogLevel, ErrorLevel> LoggingLevelMap = new Dictionary<LogLevel, ErrorLevel>
         {
-            {LogLevel.Debug, ErrorLevel.Debug},
-            {LogLevel.Error, ErrorLevel.Error},
-            {LogLevel.Fatal, ErrorLevel.Fatal},
-            {LogLevel.Info, ErrorLevel.Info},
-            {LogLevel.Trace, ErrorLevel.Debug},
-            {LogLevel.Warn, ErrorLevel.Warning},
+            { LogLevel.Debug, ErrorLevel.Debug },
+            { LogLevel.Error, ErrorLevel.Error },
+            { LogLevel.Fatal, ErrorLevel.Fatal },
+            { LogLevel.Info, ErrorLevel.Info },
+            { LogLevel.Trace, ErrorLevel.Debug },
+            { LogLevel.Warn, ErrorLevel.Warning },
         };
+
+        static SentryTarget()
+        {
+            var entryAssembly = Assembly.GetEntryAssembly();
+
+            if (null != entryAssembly)
+            {
+                rootAssemblyVersion = entryAssembly.GetName().Version.ToString();
+            }
+        }
 
         /// <summary>
         /// The DSN for the Sentry host
@@ -36,8 +54,22 @@ namespace NLog.Targets
         [RequiredParameter]
         public string Dsn
         {
-            get { return dsn == null ? null : dsn.ToString(); }
+            get { return dsn?.ToString(); }
             set { dsn = new Dsn(value); }
+        }
+
+        /// <summary>
+        /// Determines service name that causes current event
+        /// </summary>
+        public string ServiceName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the timeout for the Raven client.
+        /// </summary>
+        public string Timeout
+        {
+            get { return clientTimeout.ToString("c"); }
+            set { clientTimeout = TimeSpan.ParseExact(value, "c", CultureInfo.InvariantCulture); }
         }
 
         /// <summary>
@@ -46,33 +78,23 @@ namespace NLog.Targets
         public bool IgnoreEventsWithNoException { get; set; }
 
         /// <summary>
-        /// Determines whether event properites will be sent to sentry as Tags or not
+        /// Determines whether event properties will be sent to sentry as Tags or not
         /// </summary>
         public bool SendLogEventInfoPropertiesAsTags { get; set; }
-
-        /// <summary>
-        /// Determines service name that causes current event
-        /// </summary>
-        public string ServiceName { get; set; }
-
-        /// <summary>
-        /// Determines whether event exceptions will be formated in sentry. Raw format by default
-        /// </summary>
-        public bool FormatExceptions { get; set; }
 
         /// <summary>
         /// Constructor
         /// </summary>
         public SentryTarget()
         {
-            client = new Lazy<IRavenClient>(() => new RavenClient(dsn));
+            client = new Lazy<IRavenClient>(DefaultClientFactory);
         }
 
         /// <summary>
         /// Internal constructor, used for unit-testing
         /// </summary>
         /// <param name="ravenClient">A <see cref="IRavenClient"/></param>
-        internal SentryTarget(IRavenClient ravenClient) : this()
+        internal SentryTarget(IRavenClient ravenClient)
         {
             client = new Lazy<IRavenClient>(() => ravenClient);
         }
@@ -85,60 +107,100 @@ namespace NLog.Targets
         {
             try
             {
-                var tags = SendLogEventInfoPropertiesAsTags
-                    ? logEvent.Properties.ToDictionary(x => x.Key.ToString(), x => x.Value.ToString())
-                    : null;
-
-                var extras = SendLogEventInfoPropertiesAsTags
+                Dictionary<string, string> extras = SendLogEventInfoPropertiesAsTags
                     ? null
                     : logEvent.Properties.ToDictionary(x => x.Key.ToString(), x => x.Value.ToString());
 
                 client.Value.Logger = logEvent.LoggerName;
 
-
                 // If the log event did not contain an exception and we're not ignoring
                 // those kinds of events then we'll send a "Message" to Sentry
-                if (logEvent.Exception != null || !IgnoreEventsWithNoException)
+                if (logEvent.Exception == null && !IgnoreEventsWithNoException)
                 {
-                    client.Value.Capture(LogEventToSentry(logEvent));
+                    var sentryMessage = new SentryMessage(Layout.Render(logEvent));
+                    var sentryEvent = new SentryEvent(sentryMessage)
+                    {
+                        Level = LoggingLevelMap[logEvent.Level],
+                        Extra = extras,
+                        Fingerprint = { logEvent.UserStackFrame?.ToString(), logEvent.LoggerName },
+                        Tags = { { ServiceNameKey, ServiceName } }
+                    };
+
+                    client.Value.Capture(sentryEvent);
+                }
+                else if (logEvent.Exception != null)
+                {
+                    var sentryMessage = new SentryMessage(logEvent.FormattedMessage);
+                    var sentryEvent = new SentryEvent(logEvent.Exception)
+                    {
+                        Extra = new Dictionary<string, string> { { RawStackTraceKey, logEvent.Exception.StackTrace } },
+                        Level = LoggingLevelMap[logEvent.Level],
+                        Message = sentryMessage,
+                        Fingerprint = { logEvent.UserStackFrame?.ToString(), logEvent.LoggerName },
+                        Tags = { { ServiceNameKey, ServiceName } }
+                    };
+
+                    client.Value.Capture(sentryEvent);
                 }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                InternalLogger.Error("Unable to send Sentry request: {0}", e.Message);
+                LogException(ex);
             }
         }
 
-        private SentryEvent LogEventToSentry(LogEventInfo logEvent)
+        /// <summary>
+        /// Releases unmanaged and - optionally - managed resources.
+        /// </summary>
+        /// <param name="disposing">True to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
+        protected override void Dispose(bool disposing)
         {
-            SentryEvent sentryEvent;
-            if (FormatExceptions)
+            if (disposing && client.IsValueCreated)
             {
-                sentryEvent = logEvent.Exception == null
-                    ? new SentryEvent(Layout.Render(logEvent))
-                    : new SentryEvent(logEvent.Exception);
-            }
-            else
-            {
-                sentryEvent = new SentryEvent(Layout.Render(logEvent));
-            }
+                var ravenClient = client.Value as RavenClient;
 
-            sentryEvent.Tags.Add("service", ServiceName);
-            sentryEvent.Level = LoggingLevelMap[logEvent.Level];
-
-            if (SendLogEventInfoPropertiesAsTags)
-            {
-                var props = logEvent.Properties.ToDictionary(x => x.Key.ToString(), x => x.Value.ToString());
-                sentryEvent.Extra = props;
-
-                foreach (var tag in props)
+                if (ravenClient != null)
                 {
-                    sentryEvent.Tags.Add(tag);
+                    ravenClient.ErrorOnCapture = null;
                 }
             }
-            
-            return sentryEvent;
+
+            base.Dispose(disposing);
+        }
+
+        /// <summary>
+        /// Implements the default client factory behavior.
+        /// </summary>
+        /// <returns>New instance of a RavenClient.</returns>
+        private IRavenClient DefaultClientFactory()
+        {
+            var ravenClient = new RavenClient(dsn)
+            {
+                ErrorOnCapture = LogException,
+                Timeout = clientTimeout,
+                Release = rootAssemblyVersion
+            };
+
+            if (string.IsNullOrWhiteSpace(ravenClient.Environment))
+            {
+                ravenClient.Environment = DefaultRavenEnvironment;
+            }
+
+            if (TimeSpan.Zero == ravenClient.Timeout)
+            {
+                ravenClient.Timeout = TimeSpan.FromSeconds(DefaultRavenTimeoutSeconds);
+            }
+
+            return ravenClient;
+        }
+
+        /// <summary>
+        /// Logs an exception using the internal logger class.
+        /// </summary>
+        /// <param name="ex">The ex to log to the internal logger.</param>
+        private void LogException(Exception ex)
+        {
+            InternalLogger.Error("Unable to send Sentry request: {0}", ex.Message);
         }
     }
 }
-

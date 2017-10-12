@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>NLog.Targets.Sentry.Raven</id>
+    <version>1.0.0</version>
+    <title>NLog.Targets.Sentry.Raven</title>
+    <authors>Bjarne Riis Mike Dempster United Traders</authors>
+    <owners>United Traders</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Sentry target for NLog with additional Deduplication rules (by stack trace user frame and filename)</description>
+    <releaseNotes>First release</releaseNotes>
+    <copyright>Copyright 2017 (c) United Traders. All rights reserved</copyright>
+    <tags>NLog Sentry Log Logging</tags>
+    <dependencies>
+      <group targetFramework="net40">
+        <dependency id="NLog" version="4.4.12" />
+        <dependency id="Newtonsoft.Json" version="10.0.3" />
+        <dependency id="SharpRaven" version="2.2.0" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="bin\Release\NLog.Targets.Sentry.Raven.dll" target="lib\net40\NLog.Targets.Sentry.Raven.dll" />
+    <file src="bin\Release\NLog.Targets.Sentry.Raven.XML" target="lib\net40\NLog.Targets.Sentry.Raven.XML" />
+  </files>
+</package>
