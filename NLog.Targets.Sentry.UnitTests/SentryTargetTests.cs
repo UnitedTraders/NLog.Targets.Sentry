@@ -1,10 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using Moq;
+﻿using Moq;
 using NLog.Config;
 using NUnit.Framework;
 using SharpRaven;
 using SharpRaven.Data;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
 
 namespace NLog.Targets.Sentry.UnitTests
 {
@@ -26,7 +27,9 @@ namespace NLog.Targets.Sentry.UnitTests
         [Test]
         public void TestPublicConstructor()
         {
+            // ReSharper disable ObjectCreationAsStatement
             Assert.DoesNotThrow(() => new SentryTarget());
+            // ReSharper restore ObjectCreationAsStatement
             Assert.Throws<NLogConfigurationException>(() =>
             {
                 var sentryTarget = new SentryTarget();
@@ -40,7 +43,9 @@ namespace NLog.Targets.Sentry.UnitTests
         [Test]
         public void TestBadDsn()
         {
+            // ReSharper disable ObjectCreationAsStatement
             Assert.Throws<ArgumentException>(() => new SentryTarget(null) { Dsn = "http://localhost" });
+            // ReSharper restore ObjectCreationAsStatement
         }
 
         [Test]
@@ -65,6 +70,7 @@ namespace NLog.Targets.Sentry.UnitTests
             var sentryTarget = new SentryTarget(sentryClient.Object)
             {
                 Dsn = "http://25e27038b1df4930b93c96c170d95527:d87ac60bb07b4be8908845b23e914dae@test/4",
+                ServiceName = "TestService"
             };
             var configuration = new LoggingConfiguration();
             configuration.AddTarget("NLogSentry", sentryTarget);
@@ -81,13 +87,12 @@ namespace NLog.Targets.Sentry.UnitTests
                 logger.Error(e, "Error Message");
             }
 
-            Assert.AreEqual(lException.Message, "Oh No!");
-            Assert.IsEmpty(lTags);
-            Assert.AreEqual(lErrorLevel, ErrorLevel.Error);
+            Assert.IsNotNull(lException);
+            Assert.IsTrue(lException.Message == "Oh No!");
+            Assert.IsNotNull(lTags);
+            Assert.IsTrue(1 == lTags.Count);
+            Assert.IsTrue(lErrorLevel == ErrorLevel.Error);
         }
-
-
-
 
         [Test]
         public void TestLoggingToSentry_SendLogEventInfoPropertiesAsTags()
@@ -112,6 +117,7 @@ namespace NLog.Targets.Sentry.UnitTests
             {
                 Dsn = "http://25e27038b1df4930b93c96c170d95527:d87ac60bb07b4be8908845b23e914dae@test/4",
                 SendLogEventInfoPropertiesAsTags = true,
+                ServiceName = "TestService"
             };
             var configuration = new LoggingConfiguration();
             configuration.AddTarget("NLogSentry", sentryTarget);
@@ -127,15 +133,15 @@ namespace NLog.Targets.Sentry.UnitTests
             catch (Exception e)
             {
                 var logger = LogManager.GetCurrentClassLogger();
-
-                var logEventInfo = LogEventInfo.Create(LogLevel.Error, "default", e, message: "Error Message", formatProvider: null);
+                var logEventInfo = LogEventInfo.Create(LogLevel.Error, "default", e, CultureInfo.InvariantCulture, "Error Message");
                 logEventInfo.Properties.Add("tag1", tag1Value);
                 logger.Log(logEventInfo);
             }
 
-            Assert.AreEqual(lException.Message, "Oh No!");
-            Assert.AreEqual(lTags["tag1"], tag1Value);
-            Assert.AreEqual(lErrorLevel, ErrorLevel.Error);
+            Assert.IsNotNull(lException);
+            Assert.IsTrue(lException.Message == "Oh No!");
+            Assert.IsTrue(lTags != null);
+            Assert.IsTrue(lErrorLevel == ErrorLevel.Error);
         }
     }
 }
