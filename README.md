@@ -25,4 +25,4 @@ To use the Sentry target, simply add it an extension in the NLog.config file and
   </rules>
 </nlog>
 ```
-The package is also available through NuGet as "NLog.Targets.Sentry".
+The package is also available through NuGet as "NLog.Targets.Sentry.Raven".
