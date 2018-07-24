@@ -122,7 +122,7 @@ namespace NLog.Targets
                     {
                         Level = LoggingLevelMap[logEvent.Level],
                         Extra = extras,
-                        Fingerprint = { logEvent.UserStackFrame?.ToString(), logEvent.LoggerName },
+                        Fingerprint = { logEvent.Message, logEvent.UserStackFrame?.ToString(), logEvent.LoggerName },
                         Tags = { { ServiceNameKey, ServiceName } }
                     };
 
@@ -136,7 +136,7 @@ namespace NLog.Targets
                         Extra = new Dictionary<string, string> { { RawStackTraceKey, logEvent.Exception.StackTrace } },
                         Level = LoggingLevelMap[logEvent.Level],
                         Message = sentryMessage,
-                        Fingerprint = { logEvent.UserStackFrame?.ToString(), logEvent.LoggerName },
+                        Fingerprint = { logEvent.Message, logEvent.UserStackFrame?.ToString(), logEvent.LoggerName },
                         Tags = { { ServiceNameKey, ServiceName } }
                     };
 
