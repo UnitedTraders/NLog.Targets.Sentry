@@ -7,7 +7,7 @@
     <Description>Custom target for NLog enabling you to send logging messages to the Sentry logging service.</Description>
     <Copyright>Copyright © 2016 Bjarne Riis</Copyright>
     <Authors>Bjarne Riis, Dillon Buchanan</Authors>
-    <Version>1.3.1</Version>
+    <Version>1.3.2</Version>
     <OutputType>Library</OutputType>
     <PackageTags>NLog Targets Sentry</PackageTags>
   </PropertyGroup>
